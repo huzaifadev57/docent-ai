@@ -21,6 +21,7 @@ import {
   FormEvent,
   KeyboardEvent,
   MouseEvent,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -71,6 +72,12 @@ type PickedFile = {
   kind: "pdf" | "txt";
 };
 
+type IndexedDocument = {
+  source: string;
+  chunk_count: number;
+  uploaded_at: string;
+};
+
 function newId(): string {
   return crypto.randomUUID();
 }
@@ -85,10 +92,28 @@ function isSupportedFile(file: File): boolean {
   );
 }
 
+function kindFromFilename(name: string): "pdf" | "txt" {
+  return name.toLowerCase().endsWith(".pdf") ? "pdf" : "txt";
+}
+
 function fileKind(file: File): "pdf" | "txt" {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf") || file.type === "application/pdf") return "pdf";
   return "txt";
+}
+
+function formatShortDate(value: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatChunkCount(count: number): string {
+  return count === 1 ? "1 chunk" : `${count} chunks`;
 }
 
 function uniqueSources(sources: string[] | undefined): string[] {
@@ -142,37 +167,70 @@ function LogoMark({ reduceMotion }: { reduceMotion: boolean | null }) {
   );
 }
 
-function FileKindBadge({ kind }: { kind: "pdf" | "txt" }) {
+function FileKindBadge({
+  kind,
+  compact = false,
+}: {
+  kind: "pdf" | "txt";
+  compact?: boolean;
+}) {
   const isPdf = kind === "pdf";
   return (
     <span
-      className={`flex size-12 shrink-0 flex-col items-center justify-center rounded-2xl border ${
+      className={`flex shrink-0 flex-col items-center justify-center border ${
+        compact ? "size-9 rounded-xl" : "size-12 rounded-2xl"
+      } ${
         isPdf
           ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-400/20 dark:bg-rose-500/10 dark:text-rose-200"
           : "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-200"
       }`}
     >
-      <FileText aria-hidden="true" className="size-4" strokeWidth={1.75} />
-      <span className="mt-0.5 text-[8px] font-semibold tracking-[0.16em]">
+      <FileText
+        aria-hidden="true"
+        className={compact ? "size-3.5" : "size-4"}
+        strokeWidth={1.75}
+      />
+      <span
+        className={`font-semibold tracking-[0.16em] ${
+          compact ? "mt-px text-[7px]" : "mt-0.5 text-[8px]"
+        }`}
+      >
         {isPdf ? "PDF" : "TXT"}
       </span>
     </span>
   );
 }
 
+function statusChipLabel(
+  status: UploadStatus,
+  pickedFile: PickedFile | null,
+  documents: IndexedDocument[],
+): string {
+  if (status.kind === "loading" && pickedFile) {
+    return pickedFile.name;
+  }
+  if (documents.length > 1) {
+    return `${documents.length} documents`;
+  }
+  if (documents.length === 1) {
+    return documents[0].source;
+  }
+  if (status.kind === "success") {
+    return status.filename;
+  }
+  return "No document";
+}
+
 function StatusChip({
   status,
   pickedFile,
+  documents,
 }: {
   status: UploadStatus;
   pickedFile: PickedFile | null;
+  documents: IndexedDocument[];
 }) {
-  const loadedName =
-    status.kind === "success"
-      ? status.filename
-      : status.kind === "loading" && pickedFile
-        ? pickedFile.name
-        : null;
+  const label = statusChipLabel(status, pickedFile, documents);
 
   return (
     <span className="inline-flex max-w-36 items-center gap-2 rounded-full border border-line bg-inset px-3 py-1.5 text-[11px] font-medium text-ivory-dim sm:max-w-64">
@@ -198,10 +256,74 @@ function StatusChip({
           }`}
         />
       </span>
-      <span className="truncate tracking-wide">
-        {loadedName ?? "No collection yet"}
-      </span>
+      <span className="truncate tracking-wide">{label}</span>
     </span>
+  );
+}
+
+function IndexedDocumentList({
+  documents,
+  reduceMotion,
+}: {
+  documents: IndexedDocument[];
+  reduceMotion: boolean | null;
+}) {
+  if (documents.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: easeOut }}
+      className="mt-4 min-h-0 lg:mt-5"
+    >
+      <p className="mb-2 text-[12px] font-medium text-ivory-dim">
+        Indexed documents
+      </p>
+      <motion.ul
+        className="max-h-52 divide-y divide-line overflow-y-auto rounded-2xl border border-line bg-inset lg:max-h-none"
+        initial="hidden"
+        animate="show"
+        variants={{
+          hidden: {},
+          show: {
+            transition: {
+              staggerChildren: reduceMotion ? 0 : 0.06,
+            },
+          },
+        }}
+      >
+        {documents.map((doc) => {
+          const date = formatShortDate(doc.uploaded_at);
+
+          return (
+            <motion.li
+              key={doc.source}
+              variants={{
+                hidden: reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8 },
+                show: {
+                  opacity: 1,
+                  y: 0,
+                  transition: { duration: 0.35, ease: easeOut },
+                },
+              }}
+              className="flex items-center gap-3 px-3 py-2.5"
+            >
+              <FileKindBadge kind={kindFromFilename(doc.source)} compact />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium text-ivory">
+                  {doc.source}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-muted">
+                  {formatChunkCount(doc.chunk_count)}
+                  {date ? ` · ${date}` : ""}
+                </p>
+              </div>
+            </motion.li>
+          );
+        })}
+      </motion.ul>
+    </motion.div>
   );
 }
 
@@ -290,6 +412,7 @@ export default function Home() {
   const [indexingStep, setIndexingStep] = useState(0);
   const [spot, setSpot] = useState({ x: "50%", y: "18%" });
   const [theme, setTheme] = useState<Theme>("light");
+  const [documents, setDocuments] = useState<IndexedDocument[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -301,6 +424,24 @@ export default function Home() {
   const isUploading = uploadStatus.kind === "loading";
   const hasCollection = uploadStatus.kind === "success";
   const canSend = !isAsking && question.trim().length > 0;
+
+  const refreshDocuments = useCallback(async (): Promise<void> => {
+    try {
+      const response = await fetch(`${API_BASE}/documents`);
+      if (!response.ok) {
+        console.error(`Failed to fetch documents (${response.status})`);
+        return;
+      }
+      const data: IndexedDocument[] = await response.json();
+      setDocuments(data);
+    } catch (error) {
+      console.error("Failed to fetch documents", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshDocuments();
+  }, [refreshDocuments]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -376,6 +517,7 @@ export default function Home() {
       };
       lastSuccessRef.current = success;
       setUploadStatus({ kind: "success", ...success });
+      await refreshDocuments();
     } catch {
       setUploadStatus({
         kind: "error",
@@ -548,7 +690,11 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <StatusChip status={uploadStatus} pickedFile={pickedFile} />
+            <StatusChip
+              status={uploadStatus}
+              pickedFile={pickedFile}
+              documents={documents}
+            />
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         </div>
@@ -559,7 +705,7 @@ export default function Home() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.75, delay: 0.08, ease: easeOut }}
-          className={`upload-ring glass-panel flex flex-col rounded-3xl p-4 sm:rounded-[1.85rem] sm:p-6 ${
+          className={`upload-ring glass-panel flex min-h-0 flex-col overflow-hidden rounded-3xl p-4 sm:rounded-[1.85rem] sm:p-6 ${
             isDragging ? "is-dragging" : ""
           } ${isUploading ? "is-indexing" : ""}`}
         >
@@ -574,7 +720,7 @@ export default function Home() {
             the pages.
           </p>
 
-          <div className="mt-4 flex flex-1 flex-col lg:mt-6">
+          <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto lg:mt-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between lg:flex-col lg:items-stretch">
               <div className="flex min-w-0 items-start gap-3.5">
                 {pickedFile ? (
@@ -712,6 +858,11 @@ export default function Home() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            <IndexedDocumentList
+              documents={documents}
+              reduceMotion={reduceMotion}
+            />
           </div>
 
           <div className="mt-8 hidden lg:block">

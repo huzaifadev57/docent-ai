@@ -3,7 +3,7 @@ Docent — FastAPI Q&A backend.
 
 Retrieves the most relevant document chunks from Supabase and asks
 gpt-4o-mini to answer using only that context. Also accepts document
-uploads through POST /upload, which reuses pipeline.py.
+uploads through POST /upload and lists indexed files at GET /documents.
 
 Run:
     uvicorn main:app --reload --port 8000
@@ -66,6 +66,12 @@ class HealthResponse(BaseModel):
 class UploadResponse(BaseModel):
     filename: str
     chunks_stored: int
+
+
+class DocumentSummary(BaseModel):
+    source: str
+    chunk_count: int
+    uploaded_at: str
 
 
 app = FastAPI(title="Docent", description="Document Q&A chatbot API")
@@ -131,6 +137,39 @@ def unique_sources(chunks: list[dict]) -> list[str]:
     return sources
 
 
+def summarize_documents(rows: list[dict]) -> list[DocumentSummary]:
+    """Group chunk rows by source filename and pick the earliest created_at."""
+    chunk_counts: dict[str, int] = {}
+    earliest_upload: dict[str, str] = {}
+
+    for row in rows:
+        metadata = row.get("metadata") or {}
+        source = metadata.get("source")
+        if not source:
+            continue
+
+        created_at = row.get("created_at") or ""
+        chunk_counts[source] = chunk_counts.get(source, 0) + 1
+        previous = earliest_upload.get(source, "")
+        # Keep the earliest timestamp so uploaded_at reflects when ingest started.
+        if source not in earliest_upload or not previous or (
+            created_at and created_at < previous
+        ):
+            earliest_upload[source] = created_at
+
+    summaries = [
+        DocumentSummary(
+            source=source,
+            chunk_count=count,
+            uploaded_at=earliest_upload.get(source, ""),
+        )
+        for source, count in chunk_counts.items()
+    ]
+    # Most recently uploaded files first.
+    summaries.sort(key=lambda item: item.uploaded_at, reverse=True)
+    return summaries
+
+
 def generate_answer(question: str, context: str) -> str:
     """Ask gpt-4o-mini to answer using only the retrieved context."""
     user_message = (
@@ -151,6 +190,15 @@ def generate_answer(question: str, context: str) -> str:
 def health() -> HealthResponse:
     """Simple liveness check for the frontend or a load balancer."""
     return HealthResponse(status="ok")
+
+
+@app.get("/documents", response_model=list[DocumentSummary])
+def list_documents() -> list[DocumentSummary]:
+    """Return every indexed file, grouped by source, with chunk counts."""
+    # Demo-scale: load metadata for all rows; no auth or pagination.
+    response = supabase.table("documents").select("metadata, created_at").execute()
+    rows = response.data or []
+    return summarize_documents(rows)
 
 
 @app.post("/ask", response_model=AskResponse)
