@@ -31,7 +31,6 @@ from pipeline import (
 
 CHAT_MODEL = "gpt-4o-mini"
 MATCH_COUNT = 5
-SIMILARITY_THRESHOLD = 0.75
 FRONTEND_ORIGIN = "http://localhost:3000"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
 
@@ -42,9 +41,13 @@ NO_CONTEXT_ANSWER = (
 SYSTEM_PROMPT = """You are Docent, a document Q&A assistant.
 
 Answer the user's question using ONLY the provided context excerpts.
-If the context does not contain enough information to answer, say you
-don't know. Do not use outside knowledge and do not make anything up.
-Keep answers clear and concise."""
+Do not use outside knowledge and do not make anything up.
+Keep answers clear and concise.
+
+If the context does not contain the answer, you MUST reply with EXACTLY
+this string, character for character, and nothing else (no rephrasing,
+no extra words, no punctuation changes):
+I don't have information about that in the documents I've been given."""
 
 
 class AskRequest(BaseModel):
@@ -103,7 +106,7 @@ def match_documents(embedding: list[float], match_count: int = MATCH_COUNT) -> l
 
 
 def log_raw_match_scores(chunks: list[dict]) -> None:
-    """Print similarity scores for the top raw matches so the threshold can be tuned."""
+    """Print similarity scores for the top raw matches for reference."""
     top = chunks[:MATCH_COUNT]
     print(f"Raw match similarity scores ({len(top)} of {len(chunks)} returned):")
     if not top:
@@ -156,20 +159,13 @@ def ask(request: AskRequest) -> AskResponse:
     # 1. Embed the question so we can search in vector space.
     embedding = embed_question(request.question)
 
-    # 2. Fetch the top matching chunks from Supabase.
+    # 2. Fetch the top matching chunks from Supabase (up to MATCH_COUNT).
     chunks = match_documents(embedding)
 
-    # Log raw scores before filtering so 0.75 can be tuned later.
+    # Log raw scores for reference; do not filter on them.
     log_raw_match_scores(chunks)
 
-    # Keep only chunks similar enough to the question to be useful context.
-    chunks = [
-        chunk
-        for chunk in chunks
-        if (chunk.get("similarity") or 0) >= SIMILARITY_THRESHOLD
-    ]
-
-    # 3. If nothing relevant remains, skip the OpenAI call to save cost.
+    # 3. If nothing was retrieved, skip the OpenAI call.
     if not chunks:
         return AskResponse(answer=NO_CONTEXT_ANSWER, sources=[])
 
@@ -183,8 +179,14 @@ def ask(request: AskRequest) -> AskResponse:
     # 5. Generate an answer that is constrained to that context.
     answer = generate_answer(request.question, context)
 
-    # 6–7. Return the answer plus the unique source filenames that were used.
-    return AskResponse(answer=answer, sources=unique_sources(chunks))
+    # 6–7. Trust the model's judgment: if it used the exact fallback phrase,
+    # the context was not relevant, so omit sources.
+    sources = (
+        []
+        if answer.strip() == NO_CONTEXT_ANSWER
+        else unique_sources(chunks)
+    )
+    return AskResponse(answer=answer, sources=sources)
 
 
 @app.post("/upload", response_model=UploadResponse)
