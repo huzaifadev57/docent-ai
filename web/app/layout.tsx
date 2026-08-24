@@ -19,9 +19,11 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Docent",
-  description: "Ask questions about your documents",
+  title: "Docent AI",
+  description: "A private reading room for your documents.",
 };
+
+const themeBoot = `(function(){try{if(localStorage.getItem("docent-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -30,8 +32,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
+      </head>
       <body
-        className="min-h-full flex flex-col bg-background text-foreground font-sans"
+        className="flex min-h-full flex-col bg-background font-sans text-foreground"
         suppressHydrationWarning
       >
         {children}
