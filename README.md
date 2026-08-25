@@ -1,168 +1,92 @@
-# Docent
+# Docent AI
 
-Docent is a document Q&A chatbot backend. You ingest a PDF or text file, store overlapping chunks with OpenAI embeddings in Supabase, and ask questions that are answered only from those documents.
+Docent is an AI-powered document Q&A assistant. Upload a PDF or text file, then ask questions about it in plain English. Answers are generated strictly from the uploaded document, with source citations, and the assistant clearly says when it doesn't know something instead of guessing.
 
-It is built as a retrieval-augmented generation (RAG) pipeline: retrieve the closest chunks, then ask `gpt-4o-mini` to answer using that context and nothing else.
+## Features
+
+- **Document upload** - drag and drop a PDF or TXT file (up to 10MB), automatically chunked, embedded, and indexed
+- **Grounded answers** - responses are generated only from the retrieved document content, with no hallucinated information
+- **Source citations** - every answer shows which document it came from
+- **Per-document conversations** - each indexed document has its own isolated chat thread and search scope, so answers never mix content across files
+- **Document management** - view all indexed documents with chunk counts and upload dates, delete any document (and its data) at any time
+- **Clean, responsive UI** - light/dark mode, works on desktop and mobile
+
+
 
 ## How it works
 
-1. **Extract** text from a `.pdf` (via pypdf) or `.txt` file.
-2. **Chunk** with tiktoken (`cl100k_base`), ~500 tokens per chunk and ~75 tokens of overlap.
-3. **Embed** each chunk with OpenAI `text-embedding-3-small`.
-4. **Store** rows in a Supabase `documents` table (`content`, `embedding`, `metadata`).
-5. **Ask** by embedding the question, calling the `match_documents` RPC, dropping matches below a 0.75 similarity score, and generating an answer from the remaining chunks.
+1. **Ingestion** — uploaded files are parsed, split into overlapping ~500-token chunks, and embedded using OpenAI's `text-embedding-3-small`
+2. **Storage** — chunks and embeddings are stored in Postgres via [pgvector](https://github.com/pgvector/pgvector), hosted on Supabase
+3. **Retrieval** — a question is embedded and matched against the relevant document's chunks using cosine similarity
+4. **Generation** — the top matches are passed to `gpt-4o-mini` as context, with instructions to answer only from that context and say so clearly if the answer isn't there
 
-If nothing relevant is retrieved, the API returns a fallback instead of inventing an answer:
 
-> I don't have information about that in the documents I've been given.
 
-## Project layout
+## Tech stack
 
-| File | Role |
-| --- | --- |
-| `pipeline.py` | Shared extract → chunk → embed → store logic |
-| `ingest.py` | CLI wrapper around the pipeline |
-| `main.py` | FastAPI app (`GET /`, `POST /ask`, `POST /upload`) |
-| `requirements.txt` | Python dependencies |
+**Backend:** Python, FastAPI, OpenAI API, Supabase (Postgres + pgvector)
+**Frontend:** Next.js, TypeScript, Tailwind CSS, Framer Motion
+
+## Project structure
+
+```
+docent-ai/
+├── main.py            # FastAPI app: /ask, /upload, /documents, DELETE /documents/{source}
+├── pipeline.py         # Shared ingestion logic: extract, chunk, embed, store
+├── ingest.py           # CLI ingestion script (uses pipeline.py)
+├── schema.sql          # Supabase schema: pgvector setup, documents table, match_documents()
+├── requirements.txt
+├── web/                # Next.js frontend
+│   └── src/app/page.tsx
+└── README.md
+```
+
+
 
 ## Setup
 
-### 1. Create a virtual environment
+
+
+### 1. Database
+
+Create a [Supabase](https://supabase.com) project, then run `schema.sql` in the SQL Editor. This enables the `pgvector` extension and creates the `documents` table and `match_documents` search function.
+
+### 2. Backend
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env   # fill in SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY
+uvicorn main:app --reload --port 8000
 ```
 
-If conda `base` is also active, prefer the venv interpreter so packages resolve correctly:
+
+
+### 3. Frontend
 
 ```bash
-./venv/bin/python -m pip install -r requirements.txt
+cd web
+npm install
+npm run dev
 ```
 
-### 2. Environment variables
+Open `http://localhost:3000`.
 
-Create a `.env` file in the project root (it is gitignored):
+## API endpoints
 
-```
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-supabase-service-role-key
-OPENAI_API_KEY=sk-...
-```
 
-### 3. Supabase
+| Method | Endpoint              | Description                                       |
+| ------ | --------------------- | ------------------------------------------------- |
+| GET    | `/`                   | Health check                                      |
+| POST   | `/upload`             | Upload and index a PDF/TXT document               |
+| GET    | `/documents`          | List all indexed documents                        |
+| DELETE | `/documents/{source}` | Delete a document and its indexed data            |
+| POST   | `/ask`                | Ask a question, optionally scoped to one document |
 
-Enable the [pgvector](https://supabase.com/docs/guides/database/extensions/pgvector) extension, then create a `documents` table and a `match_documents` RPC. Embeddings from `text-embedding-3-small` are 1536 dimensions.
 
-```sql
-create extension if not exists vector;
 
-create table if not exists documents (
-  id bigserial primary key,
-  content text not null,
-  embedding vector(1536) not null,
-  metadata jsonb
-);
 
-create or replace function match_documents (
-  query_embedding vector(1536),
-  match_count int default 5
-)
-returns table (
-  id bigint,
-  content text,
-  metadata jsonb,
-  similarity float
-)
-language sql stable
-as $$
-  select
-    documents.id,
-    documents.content,
-    documents.metadata,
-    1 - (documents.embedding <=> query_embedding) as similarity
-  from documents
-  order by documents.embedding <=> query_embedding
-  limit match_count;
-$$;
-```
+## Notes
 
-The parameter names `query_embedding` and `match_count` must match what `main.py` sends.
-
-## Ingest a document (CLI)
-
-```bash
-python ingest.py path/to/file.pdf
-python ingest.py path/to/notes.txt
-```
-
-Example:
-
-```bash
-python ingest.py Cirrus_Cloud_Storage_FAQ.pdf
-```
-
-## Run the API
-
-```bash
-./venv/bin/python -m uvicorn main:app --reload --port 8000
-```
-
-The server listens on [http://127.0.0.1:8000](http://127.0.0.1:8000). CORS allows a Next.js frontend at `http://localhost:3000`. Interactive docs are at `/docs`.
-
-### `GET /`
-
-Health check.
-
-```json
-{ "status": "ok" }
-```
-
-### `POST /ask`
-
-Ask a question against the ingested documents.
-
-```bash
-curl -X POST http://127.0.0.1:8000/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is included in the Starter plan?"}'
-```
-
-Response:
-
-```json
-{
-  "answer": "...",
-  "sources": ["Cirrus_Cloud_Storage_FAQ.pdf"]
-}
-```
-
-### `POST /upload`
-
-Upload a `.pdf` or `.txt` file (max 10MB). Other types and empty/scanned PDFs with no text layer return `400`.
-
-```bash
-curl -X POST http://127.0.0.1:8000/upload \
-  -F "file=@Cirrus_Cloud_Storage_FAQ.pdf"
-```
-
-Response:
-
-```json
-{
-  "filename": "Cirrus_Cloud_Storage_FAQ.pdf",
-  "chunks_stored": 2
-}
-```
-
-## Stack
-
-- **Python** — FastAPI, Uvicorn
-- **OpenAI** — `text-embedding-3-small`, `gpt-4o-mini`
-- **Supabase** — Postgres + pgvector
-- **tiktoken** / **pypdf** — chunking and PDF text extraction
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+This project uses a fixed similarity search (top-k retrieval) rather than a similarity threshold, since raw cosine similarity scores from `text-embedding-3-small` don't have a stable cutoff across queries. Instead, the language model itself judges whether the retrieved context actually answers the question, and reports when it doesn't.

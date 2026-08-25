@@ -6,6 +6,7 @@ import {
   ArrowUp,
   BookOpen,
   Check,
+  ChevronDown,
   FileText,
   Moon,
   Sun,
@@ -344,9 +345,9 @@ function IndexedDocumentList({
               : { opacity: 0, height: 0, marginTop: 0 }
           }
           transition={{ duration: 0.2 }}
-          className="mt-4 min-h-0 overflow-hidden lg:mt-5"
+          className="mt-0 min-h-0 overflow-hidden md:mt-5"
         >
-          <ul className="max-h-52 divide-y divide-line overflow-y-auto rounded-xl border border-line bg-inset lg:max-h-none">
+          <ul className="max-h-40 divide-y divide-line overflow-y-auto rounded-xl border border-line bg-inset md:max-h-none">
             <AnimatePresence initial={false}>
               {documents.map((doc) => (
                 <IndexedDocumentRow
@@ -381,7 +382,7 @@ function ThemeToggle({
       onClick={onToggle}
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       title={isDark ? "Light theme" : "Dark theme"}
-      className="theme-toggle relative flex size-9 shrink-0 items-center justify-center rounded-full"
+      className="theme-toggle relative flex size-10 shrink-0 items-center justify-center rounded-full md:size-9"
     >
       {isDark ? (
         <Sun aria-hidden="true" className="size-4" strokeWidth={1.75} />
@@ -408,6 +409,7 @@ export default function Home() {
     Record<string, ChatMessage[]>
   >({});
   const [pendingSource, setPendingSource] = useState<string | null>(null);
+  const [mobileDocsOpen, setMobileDocsOpen] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -445,6 +447,10 @@ export default function Home() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, showTyping]);
+
+  useEffect(() => {
+    if (!selectedSource) setMobileDocsOpen(true);
+  }, [selectedSource]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(THEME_KEY);
@@ -498,6 +504,7 @@ export default function Home() {
       lastSuccessRef.current = success;
       setUploadStatus({ kind: "success", ...success });
       setSelectedSource(success.filename);
+      setMobileDocsOpen(false);
       await refreshDocuments();
     } catch {
       setUploadStatus({
@@ -655,7 +662,7 @@ export default function Home() {
 
   return (
     <div
-      className="app-shell flex h-dvh flex-col overflow-hidden text-fg"
+      className="app-shell flex h-dvh flex-col overflow-hidden text-fg touch-manipulation"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -669,61 +676,96 @@ export default function Home() {
             transition={{ duration: 0.15 }}
             className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-scrim"
           >
-            <div className="rounded-2xl border border-accent bg-drop-card px-10 py-8 text-center">
-              <p className="text-xl font-medium text-fg">Drop to upload</p>
+            <div className="drop-card rounded-2xl border border-accent bg-drop-card px-6 py-6 text-center sm:px-10 sm:py-8">
+              <p className="text-lg font-medium text-fg sm:text-xl">Drop to upload</p>
               <p className="mt-2 text-sm text-fg-muted">PDF or TXT, up to 10MB</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <header className="relative z-10 px-4 pt-4 sm:px-8 sm:pt-6">
-        <div className="panel mx-auto flex w-full max-w-6xl items-center justify-between gap-4 rounded-2xl px-4 py-3 sm:px-5">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-fg">
-              <BookOpen aria-hidden="true" className="size-4.5" strokeWidth={1.75} />
+      <header className="relative z-10 px-3 pt-3 sm:px-8 sm:pt-6">
+        <div className="panel mx-auto flex w-full max-w-6xl items-center justify-between gap-2 rounded-2xl px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-fg sm:size-10">
+              <BookOpen aria-hidden="true" className="size-4 sm:size-4.5" strokeWidth={1.75} />
             </span>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-baseline gap-2">
-                <h1 className="text-lg leading-none font-semibold tracking-tight text-fg sm:text-xl">
+                <h1 className="text-base leading-none font-semibold tracking-tight text-fg sm:text-xl">
                   Docent
                 </h1>
                 <span className="text-[11px] font-medium text-muted">AI</span>
               </div>
-              <p className="mt-1 text-[12px] text-muted">
+              <p className="mt-1 hidden text-[12px] text-muted sm:block">
                 Ask questions about your documents
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <StatusChip
-              status={uploadStatus}
-              pickedFile={pickedFile}
-              documents={documents}
-            />
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <span className="hidden sm:inline-flex">
+              <StatusChip
+                status={uploadStatus}
+                pickedFile={pickedFile}
+                documents={documents}
+              />
+            </span>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-4 py-3 sm:gap-5 sm:px-8 sm:py-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:grid-rows-1">
+      <main className="relative z-10 mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-2 px-3 py-2 sm:gap-5 sm:px-8 sm:py-6 md:grid-cols-[260px_minmax(0,1fr)] md:grid-rows-1 lg:grid-cols-[340px_minmax(0,1fr)]">
         <aside
-          className={`panel flex min-h-0 flex-col overflow-hidden rounded-2xl p-4 sm:p-6 ${
+          className={`panel flex min-h-0 flex-col overflow-hidden rounded-2xl p-3 sm:p-6 md:max-h-none ${
             isDragging ? "border-accent" : ""
-          }`}
+          } ${mobileDocsOpen ? "max-h-[48dvh] md:max-h-none" : ""}`}
         >
-          <p className="text-lg font-semibold text-fg">Add a document</p>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted">
-            PDF or TXT, up to 10MB
-          </p>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 rounded-lg py-1 text-left md:hidden"
+            onClick={() => setMobileDocsOpen((open) => !open)}
+            aria-expanded={mobileDocsOpen}
+          >
+            <span className="min-w-0">
+              <span className="block text-[13px] font-semibold text-fg">
+                {selectedSource ?? "Documents"}
+              </span>
+              <span className="mt-0.5 block truncate text-[11px] text-muted">
+                {documents.length === 0
+                  ? "PDF or TXT, up to 10MB"
+                  : selectedSource
+                    ? `${documents.length} ${documents.length === 1 ? "document" : "documents"} · tap to ${mobileDocsOpen ? "hide" : "switch"}`
+                    : `${documents.length} ${documents.length === 1 ? "document" : "documents"}`}
+              </span>
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-4 shrink-0 text-muted transition-transform ${
+                mobileDocsOpen ? "rotate-180" : ""
+              }`}
+              strokeWidth={2}
+            />
+          </button>
 
-          <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto lg:mt-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between lg:flex-col lg:items-stretch">
-              <div className="flex min-w-0 items-start gap-3.5">
+          <div
+            className={`min-h-0 flex-col overflow-y-auto ${
+              mobileDocsOpen ? "mt-3 flex flex-1 gap-3" : "hidden"
+            } md:mt-0 md:flex md:flex-1 md:gap-0`}
+          >
+            <p className="hidden text-lg font-semibold text-fg md:block">
+              Add a document
+            </p>
+            <p className="mt-1 hidden text-[13px] leading-relaxed text-muted md:block">
+              PDF or TXT, up to 10MB
+            </p>
+
+            <div className="order-2 flex flex-col gap-3 md:order-1 md:mt-6 md:gap-4">
+              <div className="flex min-w-0 items-start gap-3">
                 {pickedFile ? (
                   <FileKindBadge kind={pickedFile.kind} />
                 ) : (
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-line bg-inset text-muted">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-inset text-muted sm:size-11">
                     <Upload aria-hidden="true" className="size-4" strokeWidth={1.75} />
                   </span>
                 )}
@@ -736,7 +778,10 @@ export default function Home() {
                         : "No document uploaded yet"}
                   </p>
                   <p className="mt-1 text-[12px] text-muted">
-                    Drag in anywhere, or browse a file
+                    <span className="md:hidden">Tap to choose a PDF or TXT</span>
+                    <span className="hidden md:inline">
+                      Drag in anywhere, or browse a file
+                    </span>
                   </p>
                 </div>
               </div>
@@ -754,11 +799,10 @@ export default function Home() {
                 type="button"
                 disabled={isUploading}
                 onClick={() => fileInputRef.current?.click()}
-                className="accent-btn inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-medium transition-opacity disabled:cursor-not-allowed sm:w-auto sm:px-4 lg:mt-2 lg:w-full"
+                className="accent-btn inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-medium transition-opacity disabled:cursor-not-allowed md:h-10"
               >
                 {isUploading ? "Uploading…" : "Upload document"}
               </button>
-            </div>
 
             <AnimatePresence mode="wait" initial={false}>
             {uploadStatus.kind === "loading" && (
@@ -834,14 +878,20 @@ export default function Home() {
               </motion.div>
             )}
             </AnimatePresence>
+            </div>
 
+            <div className="order-1 md:order-2">
             <IndexedDocumentList
               documents={documents}
               selectedSource={selectedSource}
-              onSelect={setSelectedSource}
+              onSelect={(source) => {
+                setSelectedSource(source);
+                setMobileDocsOpen(false);
+              }}
               onDelete={deleteDocument}
               reduceMotion={reduceMotion}
             />
+            </div>
           </div>
         </aside>
 
@@ -852,25 +902,32 @@ export default function Home() {
           {showTyping && <div className="ask-bar w-full" />}
 
           {selectedSource && (
-            <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 sm:px-6">
+            <div className="flex items-center gap-2 border-b border-line px-3 py-2.5 sm:px-6">
               <FileText
                 aria-hidden="true"
                 className="size-3.5 shrink-0 text-muted"
                 strokeWidth={2}
               />
-              <p className="truncate text-[12px] font-medium text-fg-muted">
+              <p className="min-w-0 flex-1 truncate text-[12px] font-medium text-fg-muted">
                 {selectedSource}
               </p>
+              <button
+                type="button"
+                className="shrink-0 rounded-md px-2 py-1 text-[12px] font-medium text-accent md:hidden"
+                onClick={() => setMobileDocsOpen(true)}
+              >
+                Switch
+              </button>
             </div>
           )}
 
-          <div className="messages-scroll flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
+          <div className="messages-scroll flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-6 sm:py-8">
             {messages.length === 0 && !showTyping && (
-              <div className="flex h-full min-h-52 flex-col items-center justify-center px-4 text-center sm:min-h-64 sm:px-6">
+              <div className="flex h-full min-h-0 flex-col items-center justify-center px-3 text-center sm:min-h-64 sm:px-6">
                 <span className="mb-4 flex size-12 items-center justify-center rounded-xl border border-line bg-inset text-muted sm:mb-5 sm:size-14">
                   <BookOpen aria-hidden="true" className="size-6" strokeWidth={1.5} />
                 </span>
-                <p className="text-xl font-semibold text-balance text-fg sm:text-2xl">
+                <p className="text-lg font-semibold text-balance text-fg sm:text-2xl">
                   Ask a question
                 </p>
                 <p className="mt-2 max-w-md text-[13px] leading-relaxed text-pretty text-muted sm:text-[14px]">
@@ -886,7 +943,7 @@ export default function Home() {
                         key={suggestion}
                         type="button"
                         onClick={() => void sendQuestion(suggestion)}
-                        className="rounded-full border border-line bg-inset px-3.5 py-1.5 text-[12px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                        className="rounded-full border border-line bg-inset px-3.5 py-2 text-[12px] text-fg-muted transition-colors hover:border-accent hover:text-accent sm:py-1.5"
                       >
                         {suggestion}
                       </button>
@@ -909,7 +966,7 @@ export default function Home() {
                   className={`flex ${isUser ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[88%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[78%] ${
+                    className={`max-w-[90%] rounded-2xl px-3.5 py-3 text-[15px] leading-relaxed sm:max-w-[78%] sm:px-4 ${
                       isUser
                         ? "rounded-br-md bg-accent text-accent-fg"
                         : "rounded-bl-md border border-line bg-inset text-fg"
@@ -960,7 +1017,7 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleSubmit} className="px-3 pb-3 sm:px-6 sm:pb-6">
-            <div className="composer flex items-center gap-1.5 rounded-xl border border-line bg-composer py-1.5 pr-1.5 pl-4 transition-colors">
+            <div className="composer flex items-center gap-1.5 rounded-xl border border-line bg-composer py-1.5 pr-1.5 pl-3 transition-colors sm:pl-4">
               <input
                 type="text"
                 value={question}
@@ -974,13 +1031,13 @@ export default function Home() {
                 }
                 aria-label="Question"
                 autoComplete="off"
-                className="h-9 min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-10 min-w-0 flex-1 bg-transparent text-base text-fg outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50 md:h-9 md:text-sm"
               />
               <button
                 type="submit"
                 disabled={!canSend}
                 aria-label="Send"
-                className="accent-btn inline-flex size-9 shrink-0 items-center justify-center rounded-lg transition-transform disabled:cursor-not-allowed enabled:hover:scale-105 enabled:active:scale-95"
+                className="accent-btn inline-flex size-10 shrink-0 items-center justify-center rounded-lg transition-transform disabled:cursor-not-allowed enabled:active:scale-95 md:size-9 md:enabled:hover:scale-105"
               >
                 <ArrowUp aria-hidden="true" className="size-4" strokeWidth={2.25} />
               </button>
