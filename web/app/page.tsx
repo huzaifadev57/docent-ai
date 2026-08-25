@@ -7,9 +7,7 @@ import {
   BookOpen,
   Check,
   FileText,
-  Layers,
   Moon,
-  Sparkles,
   Sun,
   Trash2,
   Upload,
@@ -17,11 +15,9 @@ import {
 } from "lucide-react";
 import {
   ChangeEvent,
-  CSSProperties,
   DragEvent,
   FormEvent,
   KeyboardEvent,
-  MouseEvent,
   useCallback,
   useEffect,
   useRef,
@@ -30,25 +26,10 @@ import {
 
 const API_BASE = "http://localhost:8000";
 
-const INDEXING_STEPS = [
-  "Extracting the text",
-  "Splitting into passages",
-  "Embedding & indexing",
-];
-
 const SUGGESTIONS = [
   "Summarize this document",
   "What are the key points?",
   "Explain it simply",
-];
-
-const MOTES = [
-  { left: "12%", delay: "0s", duration: "16s" },
-  { left: "28%", delay: "4s", duration: "18s" },
-  { left: "47%", delay: "8s", duration: "14s" },
-  { left: "63%", delay: "2s", duration: "20s" },
-  { left: "81%", delay: "6s", duration: "17s" },
-  { left: "91%", delay: "11s", duration: "15s" },
 ];
 
 const THEME_KEY = "docent-theme";
@@ -149,25 +130,6 @@ async function readApiError(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
-const easeOut = [0.22, 1, 0.36, 1] as const;
-
-function LogoMark({ reduceMotion }: { reduceMotion: boolean | null }) {
-  return (
-    <span className="relative flex size-11 shrink-0 items-center justify-center">
-      <motion.span
-        aria-hidden="true"
-        className="absolute inset-0 rounded-2xl bg-gold/25"
-        animate={reduceMotion ? undefined : { opacity: [0.35, 0.7, 0.35] }}
-        transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-        style={{ filter: "blur(10px)" }}
-      />
-      <span className="relative flex size-11 items-center justify-center rounded-2xl gold-btn">
-        <BookOpen aria-hidden="true" className="size-4.5" strokeWidth={1.75} />
-      </span>
-    </span>
-  );
-}
-
 function FileKindBadge({
   kind,
   compact = false,
@@ -175,15 +137,10 @@ function FileKindBadge({
   kind: "pdf" | "txt";
   compact?: boolean;
 }) {
-  const isPdf = kind === "pdf";
   return (
     <span
-      className={`flex shrink-0 flex-col items-center justify-center border ${
-        compact ? "size-9 rounded-xl" : "size-12 rounded-2xl"
-      } ${
-        isPdf
-          ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-400/20 dark:bg-rose-500/10 dark:text-rose-200"
-          : "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-200"
+      className={`flex shrink-0 flex-col items-center justify-center border border-line bg-inset text-fg-muted ${
+        compact ? "size-9 rounded-lg" : "size-11 rounded-xl"
       }`}
     >
       <FileText
@@ -192,11 +149,11 @@ function FileKindBadge({
         strokeWidth={1.75}
       />
       <span
-        className={`font-semibold tracking-[0.16em] ${
+        className={`font-medium tracking-wide ${
           compact ? "mt-px text-[7px]" : "mt-0.5 text-[8px]"
         }`}
       >
-        {isPdf ? "PDF" : "TXT"}
+        {kind === "pdf" ? "PDF" : "TXT"}
       </span>
     </span>
   );
@@ -231,30 +188,22 @@ function StatusChip({
   const label = statusChipLabel(status, pickedFile, documents);
 
   return (
-    <span className="inline-flex max-w-36 items-center gap-2 rounded-full border border-line bg-inset px-3 py-1.5 text-[11px] font-medium text-ivory-dim sm:max-w-64">
+    <span className="inline-flex max-w-36 items-center gap-2 rounded-full border border-line bg-inset px-3 py-1.5 text-[11px] font-medium text-fg-muted sm:max-w-64">
       <span className="relative flex size-1.5 shrink-0">
-        <span
-          className={`absolute inset-0 rounded-full ${
-            status.kind === "success"
-              ? "bg-gold live-dot"
-              : status.kind === "loading"
-                ? "bg-gold-hi live-dot"
-                : status.kind === "error"
-                  ? "bg-terracotta"
-                  : "bg-muted"
-          }`}
-        />
+        {(status.kind === "success" || status.kind === "loading") && (
+          <span className="live-dot absolute inset-0 rounded-full bg-accent" />
+        )}
         <span
           className={`size-1.5 rounded-full ${
             status.kind === "success" || status.kind === "loading"
-              ? "bg-gold-hi"
+              ? "bg-accent"
               : status.kind === "error"
-                ? "bg-terracotta"
+                ? "bg-error"
                 : "bg-muted"
           }`}
         />
       </span>
-      <span className="truncate tracking-wide">{label}</span>
+      <span className="truncate">{label}</span>
     </span>
   );
 }
@@ -293,20 +242,15 @@ function IndexedDocumentRow({
   }
 
   const rowTone = selected
-    ? "border-gold bg-gold/12"
-    : "border-transparent hover:bg-gold/6";
+    ? "border-accent bg-accent-soft"
+    : "border-transparent hover:bg-inset";
 
   return (
     <motion.li
-      layout={reduceMotion ? false : true}
-      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0, height: "auto" }}
-      exit={
-        reduceMotion
-          ? { opacity: 0 }
-          : { opacity: 0, height: 0 }
-      }
-      transition={{ duration: 0.28, ease: easeOut }}
+      initial={false}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+      transition={{ duration: 0.2 }}
       className="overflow-hidden"
     >
       {phase === "confirm" || phase === "deleting" || phase === "error" ? (
@@ -321,20 +265,20 @@ function IndexedDocumentRow({
             </p>
           ) : (
             <>
-              <p className="min-w-0 flex-1 text-[12px] font-medium text-ivory">
+              <p className="min-w-0 flex-1 text-[12px] font-medium text-fg">
                 Delete this document?
               </p>
               <button
                 type="button"
                 onClick={() => void confirmDelete()}
-                className="shrink-0 rounded-full bg-terracotta/15 px-2.5 py-1 text-[11px] font-semibold text-error transition-colors hover:bg-terracotta/25"
+                className="shrink-0 rounded-md bg-error-bg px-2.5 py-1 text-[11px] font-semibold text-error hover:opacity-90"
               >
                 Delete
               </button>
               <button
                 type="button"
                 onClick={() => setPhase("idle")}
-                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-muted transition-colors hover:bg-inset hover:text-ivory"
+                className="shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium text-muted hover:bg-inset hover:text-fg"
               >
                 Cancel
               </button>
@@ -351,7 +295,7 @@ function IndexedDocumentRow({
           >
             <FileKindBadge kind={kindFromFilename(doc.source)} compact />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium text-ivory">
+              <p className="truncate text-[13px] font-medium text-fg">
                 {doc.source}
               </p>
               <p className="mt-0.5 truncate text-[11px] text-muted">
@@ -365,7 +309,7 @@ function IndexedDocumentRow({
             aria-label={`Delete ${doc.source}`}
             title="Delete document"
             onClick={() => setPhase("confirm")}
-            className="mr-1.5 shrink-0 rounded-full p-1.5 text-muted opacity-0 transition-all group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-terracotta/12 hover:text-terracotta focus-visible:opacity-100 max-sm:opacity-100"
+            className="mr-1.5 shrink-0 rounded-md p-1.5 text-muted opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-error-bg hover:text-error focus-visible:opacity-100 max-sm:opacity-100"
           >
             <Trash2 aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
           </button>
@@ -393,20 +337,16 @@ function IndexedDocumentList({
       {documents.length > 0 && (
         <motion.div
           key="indexed-list"
-          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={false}
           exit={
             reduceMotion
               ? { opacity: 0 }
               : { opacity: 0, height: 0, marginTop: 0 }
           }
-          transition={{ duration: 0.35, ease: easeOut }}
+          transition={{ duration: 0.2 }}
           className="mt-4 min-h-0 overflow-hidden lg:mt-5"
         >
-          <p className="mb-2 text-[12px] font-medium text-ivory-dim">
-            Indexed documents
-          </p>
-          <ul className="max-h-52 divide-y divide-line overflow-y-auto rounded-2xl border border-line bg-inset lg:max-h-none">
+          <ul className="max-h-52 divide-y divide-line overflow-y-auto rounded-xl border border-line bg-inset lg:max-h-none">
             <AnimatePresence initial={false}>
               {documents.map((doc) => (
                 <IndexedDocumentRow
@@ -436,65 +376,19 @@ function ThemeToggle({
   const isDark = theme === "dark";
 
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onToggle}
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       title={isDark ? "Light theme" : "Dark theme"}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.94 }}
       className="theme-toggle relative flex size-9 shrink-0 items-center justify-center rounded-full"
     >
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.span
-          key={theme}
-          initial={{ opacity: 0, rotate: -40, scale: 0.7 }}
-          animate={{ opacity: 1, rotate: 0, scale: 1 }}
-          exit={{ opacity: 0, rotate: 40, scale: 0.7 }}
-          transition={{ duration: 0.22 }}
-          className="flex"
-        >
-          {isDark ? (
-            <Sun aria-hidden="true" className="size-4" strokeWidth={1.75} />
-          ) : (
-            <Moon aria-hidden="true" className="size-4" strokeWidth={1.75} />
-          )}
-        </motion.span>
-      </AnimatePresence>
-    </motion.button>
-  );
-}
-
-function AmbientBackground({
-  spot,
-}: {
-  spot: { x: string; y: string };
-}) {
-  return (
-    <div className="ambient" aria-hidden="true">
-      <div
-        className="ambient-spotlight"
-        style={{ "--spot-x": spot.x, "--spot-y": spot.y } as CSSProperties}
-      />
-      <div className="orb orb-a" />
-      <div className="orb orb-b" />
-      <div className="orb orb-c" />
-      <div className="grid-fade" />
-      <div className="vignette" />
-      <div className="grain" />
-      {MOTES.map((mote) => (
-        <span
-          key={mote.left}
-          className="mote"
-          style={{
-            left: mote.left,
-            bottom: "-4%",
-            animationDelay: mote.delay,
-            animationDuration: mote.duration,
-          }}
-        />
-      ))}
-    </div>
+      {isDark ? (
+        <Sun aria-hidden="true" className="size-4" strokeWidth={1.75} />
+      ) : (
+        <Moon aria-hidden="true" className="size-4" strokeWidth={1.75} />
+      )}
+    </button>
   );
 }
 
@@ -507,8 +401,6 @@ export default function Home() {
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [indexingStep, setIndexingStep] = useState(0);
-  const [spot, setSpot] = useState({ x: "50%", y: "18%" });
   const [theme, setTheme] = useState<Theme>("light");
   const [documents, setDocuments] = useState<IndexedDocument[]>([]);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
@@ -530,8 +422,7 @@ export default function Home() {
     : [];
   const isChatReady = selectedSource !== null;
   const showTyping = isAsking && pendingSource === selectedSource;
-  const canSend =
-    isChatReady && !isAsking && question.trim().length > 0;
+  const canSend = isChatReady && !isAsking && question.trim().length > 0;
 
   const refreshDocuments = useCallback(async (): Promise<void> => {
     try {
@@ -567,25 +458,6 @@ export default function Home() {
     setTheme(next);
     window.localStorage.setItem(THEME_KEY, next);
     document.documentElement.classList.toggle("dark", next === "dark");
-  }
-
-  useEffect(() => {
-    if (uploadStatus.kind !== "loading") {
-      setIndexingStep(0);
-      return;
-    }
-    const id = window.setInterval(() => {
-      setIndexingStep((step) => (step + 1) % INDEXING_STEPS.length);
-    }, 1600);
-    return () => window.clearInterval(id);
-  }, [uploadStatus.kind]);
-
-  function handlePointerMove(event: MouseEvent<HTMLDivElement>): void {
-    if (reduceMotion) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-    setSpot({ x: `${x}%`, y: `${y}%` });
   }
 
   async function uploadFile(file: File): Promise<void> {
@@ -773,60 +645,53 @@ export default function Home() {
     }
   }
 
+  const fade = reduceMotion
+    ? undefined
+    : {
+        initial: { opacity: 0, y: 8 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.22 },
+      };
+
   return (
     <div
-      className="app-shell flex h-dvh flex-col overflow-hidden text-ivory"
-      onMouseMove={handlePointerMove}
+      className="app-shell flex h-dvh flex-col overflow-hidden text-fg"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <AmbientBackground spot={spot} />
-
       <AnimatePresence>
         {isDragging && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-scrim backdrop-blur-sm"
+            transition={{ duration: 0.15 }}
+            className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-scrim"
           >
-            <motion.div
-              initial={{ scale: 0.92, y: 12 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.96, opacity: 0 }}
-              transition={{ duration: 0.35, ease: easeOut }}
-              className="rounded-4xl border border-gold/35 bg-drop-card px-10 py-8 text-center shadow-[0_0_80px_rgba(176,137,72,0.16)]"
-            >
-              <p className="font-display text-3xl italic text-gold-hi">
-                Release to add to the collection
-              </p>
-              <p className="mt-2 text-sm text-ivory-dim">PDF or TXT, up to 10MB</p>
-            </motion.div>
+            <div className="rounded-2xl border border-accent bg-drop-card px-10 py-8 text-center">
+              <p className="text-xl font-medium text-fg">Drop to upload</p>
+              <p className="mt-2 text-sm text-fg-muted">PDF or TXT, up to 10MB</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <motion.header
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, ease: easeOut }}
-        className="relative z-10 px-4 pt-4 sm:px-8 sm:pt-6"
-      >
-        <div className="glass-panel mx-auto flex w-full max-w-6xl items-center justify-between gap-4 rounded-[1.75rem] px-4 py-3.5 sm:px-5">
-          <div className="flex items-center gap-3.5">
-            <LogoMark reduceMotion={reduceMotion} />
+      <header className="relative z-10 px-4 pt-4 sm:px-8 sm:pt-6">
+        <div className="panel mx-auto flex w-full max-w-6xl items-center justify-between gap-4 rounded-2xl px-4 py-3 sm:px-5">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-fg">
+              <BookOpen aria-hidden="true" className="size-4.5" strokeWidth={1.75} />
+            </span>
             <div>
               <div className="flex items-baseline gap-2">
-                <h1 className="font-display text-[1.45rem] leading-none font-medium tracking-tight text-ivory italic sm:text-[1.7rem]">
+                <h1 className="text-lg leading-none font-semibold tracking-tight text-fg sm:text-xl">
                   Docent
                 </h1>
-                <span className="text-[10px] font-medium tracking-[0.22em] text-gold uppercase">
-                  AI
-                </span>
+                <span className="text-[11px] font-medium text-muted">AI</span>
               </div>
-              <p className="mt-1 text-[12px] tracking-wide text-muted">
-                Private reading room
+              <p className="mt-1 text-[12px] text-muted">
+                Ask questions about your documents
               </p>
             </div>
           </div>
@@ -839,26 +704,17 @@ export default function Home() {
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         </div>
-      </motion.header>
+      </header>
 
       <main className="relative z-10 mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-3 px-4 py-3 sm:gap-5 sm:px-8 sm:py-6 lg:grid-cols-[340px_minmax(0,1fr)] lg:grid-rows-1">
-        <motion.aside
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.75, delay: 0.08, ease: easeOut }}
-          className={`upload-ring glass-panel flex min-h-0 flex-col overflow-hidden rounded-3xl p-4 sm:rounded-[1.85rem] sm:p-6 ${
-            isDragging ? "is-dragging" : ""
-          } ${isUploading ? "is-indexing" : ""}`}
+        <aside
+          className={`panel flex min-h-0 flex-col overflow-hidden rounded-2xl p-4 sm:p-6 ${
+            isDragging ? "border-accent" : ""
+          }`}
         >
-          <p className="text-[11px] font-medium tracking-[0.22em] text-gold uppercase">
-            Collection
-          </p>
-          <p className="mt-1.5 hidden font-display text-xl italic text-ivory sm:block lg:mt-2 lg:text-2xl">
-            Place a document on the plinth
-          </p>
-          <p className="mt-2 hidden text-[13px] leading-relaxed text-muted lg:block">
-            Answers stay grounded in what you index — nothing is invented outside
-            the pages.
+          <p className="text-lg font-semibold text-fg">Add a document</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-muted">
+            PDF or TXT, up to 10MB
           </p>
 
           <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto lg:mt-6">
@@ -867,17 +723,17 @@ export default function Home() {
                 {pickedFile ? (
                   <FileKindBadge kind={pickedFile.kind} />
                 ) : (
-                  <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-line bg-inset text-gold">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-line bg-inset text-muted">
                     <Upload aria-hidden="true" className="size-4" strokeWidth={1.75} />
                   </span>
                 )}
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-ivory">
+                  <p className="truncate text-sm font-medium text-fg">
                     {isDragging
-                      ? "Drop to illuminate"
+                      ? "Drop to upload"
                       : pickedFile
                         ? pickedFile.name
-                        : "Awaiting a manuscript"}
+                        : "No document uploaded yet"}
                   </p>
                   <p className="mt-1 text-[12px] text-muted">
                     Drag in anywhere, or browse a file
@@ -894,110 +750,89 @@ export default function Home() {
                 onChange={handleFileChange}
               />
 
-              <motion.button
+              <button
                 type="button"
                 disabled={isUploading}
                 onClick={() => fileInputRef.current?.click()}
-                whileHover={isUploading ? undefined : { y: -1, scale: 1.01 }}
-                whileTap={isUploading ? undefined : { scale: 0.98 }}
-                className="gold-btn inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-full text-sm font-semibold tracking-wide disabled:cursor-not-allowed sm:w-auto sm:px-5 lg:mt-2 lg:w-full"
+                className="accent-btn inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-medium transition-opacity disabled:cursor-not-allowed sm:w-auto sm:px-4 lg:mt-2 lg:w-full"
               >
-                <Sparkles aria-hidden="true" className="size-3.5" strokeWidth={2} />
-                {isUploading ? "Illuminating…" : "Upload document"}
-              </motion.button>
+                {isUploading ? "Uploading…" : "Upload document"}
+              </button>
             </div>
 
             <AnimatePresence mode="wait" initial={false}>
-              {uploadStatus.kind === "loading" && (
-                <motion.div
-                  key="loading"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.28 }}
-                  className="mt-4 lg:mt-6"
-                >
-                  <div className="mb-2 flex items-center justify-between text-[12px] text-ivory-dim">
-                    <AnimatePresence mode="wait">
-                      <motion.span
-                        key={indexingStep}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.25 }}
-                      >
-                        {INDEXING_STEPS[indexingStep]}
-                      </motion.span>
-                    </AnimatePresence>
-                    <span className="text-gold/80">Please wait</span>
-                  </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-inset">
-                    <motion.div
-                      className="shimmer h-full w-1/3 rounded-full bg-gold"
-                      animate={reduceMotion ? undefined : { x: ["-30%", "280%"] }}
-                      transition={{
-                        duration: 1.4,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                      }}
-                    />
-                  </div>
-                </motion.div>
-              )}
+            {uploadStatus.kind === "loading" && (
+              <motion.div
+                key="loading"
+                initial={fade?.initial}
+                animate={fade?.animate ?? { opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={fade?.transition}
+                className="mt-4 lg:mt-6"
+              >
+                <div className="mb-2 flex items-center justify-between text-[12px] text-fg-muted">
+                  <span>Uploading…</span>
+                </div>
+                <div className="progress-bar h-1 rounded-full bg-inset">
+                  <div className="progress-bar-fill" />
+                </div>
+              </motion.div>
+            )}
 
-              {uploadStatus.kind === "success" && (
-                <motion.div
-                  key="success"
-                  role="status"
-                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.4, ease: easeOut }}
-                  className="mt-4 rounded-2xl border border-gold/20 bg-gold/8 px-3.5 py-3.5 lg:mt-6"
-                >
-                  <div className="flex items-start gap-2.5 text-[13px] text-gold-hi">
-                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-gold text-[#1a1408]">
-                      <Check aria-hidden="true" className="size-3" strokeWidth={2.5} />
-                    </span>
-                    <span>
-                      <span className="font-medium">{uploadStatus.filename}</span>{" "}
-                      is in the collection
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 text-[12px] text-ivory-dim">
-                    <Layers aria-hidden="true" className="size-3.5 text-gold" />
-                    {uploadStatus.chunksStored} passages indexed
-                  </div>
-                </motion.div>
-              )}
+            {uploadStatus.kind === "success" && (
+              <motion.div
+                key="success"
+                role="status"
+                initial={fade?.initial}
+                animate={fade?.animate ?? { opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={fade?.transition}
+                className="mt-4 rounded-xl border border-success-line bg-success-bg px-3.5 py-3 lg:mt-6"
+              >
+                <div className="flex items-start gap-2.5 text-[13px] text-success">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-success text-white">
+                    <Check aria-hidden="true" className="size-3" strokeWidth={2.5} />
+                  </span>
+                  <span>
+                    <span className="font-medium">{uploadStatus.filename}</span>{" "}
+                    uploaded
+                  </span>
+                </div>
+                <p className="mt-2 text-[12px] text-fg-muted">
+                  {uploadStatus.chunksStored}{" "}
+                  {uploadStatus.chunksStored === 1 ? "chunk" : "chunks"} indexed
+                </p>
+              </motion.div>
+            )}
 
-              {uploadStatus.kind === "error" && (
-                <motion.div
-                  key="error"
-                  role="alert"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="mt-4 flex items-start gap-2.5 rounded-2xl border border-terracotta/25 bg-terracotta/10 px-3.5 py-3 text-[13px] text-error lg:mt-6"
+            {uploadStatus.kind === "error" && (
+              <motion.div
+                key="error"
+                role="alert"
+                initial={fade?.initial}
+                animate={fade?.animate ?? { opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={fade?.transition}
+                className="mt-4 flex items-start gap-2.5 rounded-xl border border-error-line bg-error-bg px-3.5 py-3 text-[13px] text-error lg:mt-6"
+              >
+                <AlertCircle
+                  aria-hidden="true"
+                  className="mt-0.5 size-4 shrink-0"
+                  strokeWidth={2}
+                />
+                <p className="min-w-0 flex-1 leading-relaxed">
+                  {uploadStatus.message}
+                </p>
+                <button
+                  type="button"
+                  onClick={dismissError}
+                  aria-label="Dismiss error"
+                  className="rounded-md p-0.5 text-error/70 hover:bg-inset hover:text-error"
                 >
-                  <AlertCircle
-                    aria-hidden="true"
-                    className="mt-0.5 size-4 shrink-0"
-                    strokeWidth={2}
-                  />
-                  <p className="min-w-0 flex-1 leading-relaxed">
-                    {uploadStatus.message}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={dismissError}
-                    aria-label="Dismiss error"
-                    className="rounded-full p-0.5 text-error/70 transition-colors hover:bg-inset hover:text-error"
-                  >
-                    <X className="size-3.5" strokeWidth={2} />
-                  </button>
-                </motion.div>
-              )}
+                  <X className="size-3.5" strokeWidth={2} />
+                </button>
+              </motion.div>
+            )}
             </AnimatePresence>
 
             <IndexedDocumentList
@@ -1008,98 +843,57 @@ export default function Home() {
               reduceMotion={reduceMotion}
             />
           </div>
+        </aside>
 
-          <div className="mt-8 hidden lg:block">
-            <div className="hairline mb-4 h-px w-full" />
-            <ol className="space-y-2.5 text-[12px] text-muted">
-              {["Extract", "Chunk", "Embed", "Ask"].map((step, index) => (
-                <li key={step} className="flex items-center gap-3">
-                  <span className="font-mono text-[10px] tracking-[0.18em] text-gold/70">
-                    0{index + 1}
-                  </span>
-                  {step}
-                </li>
-              ))}
-            </ol>
-          </div>
-        </motion.aside>
-
-        <motion.section
+        <section
           aria-label="Chat"
-          initial={{ opacity: 0, y: 28 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.16, ease: easeOut }}
-          className="glass-panel flex min-h-0 flex-col overflow-hidden rounded-3xl sm:rounded-[1.85rem]"
+          className="panel flex min-h-0 flex-col overflow-hidden rounded-2xl"
         >
-          {showTyping && (
-            <div className="h-px w-full overflow-hidden">
-              <div className="shimmer h-full w-full bg-gold/50" />
-            </div>
-          )}
+          {showTyping && <div className="ask-bar w-full" />}
 
           {selectedSource && (
-            <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 sm:px-7">
+            <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 sm:px-6">
               <FileText
                 aria-hidden="true"
-                className="size-3.5 shrink-0 text-gold"
+                className="size-3.5 shrink-0 text-muted"
                 strokeWidth={2}
               />
-              <p className="truncate text-[12px] font-medium tracking-wide text-ivory-dim">
+              <p className="truncate text-[12px] font-medium text-fg-muted">
                 {selectedSource}
               </p>
             </div>
           )}
 
-          <div className="messages-scroll flex-1 space-y-5 overflow-y-auto px-4 py-6 sm:px-7 sm:py-8">
+          <div className="messages-scroll flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
             {messages.length === 0 && !showTyping && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, ease: easeOut }}
-                className="flex h-full min-h-52 flex-col items-center justify-center px-4 text-center sm:min-h-64 sm:px-6"
-              >
-                <motion.span
-                  className="mb-5 flex size-14 items-center justify-center rounded-[1.25rem] border border-gold/20 bg-gold/8 text-gold-hi sm:mb-6 sm:size-18 sm:rounded-[1.6rem]"
-                  animate={
-                    reduceMotion
-                      ? undefined
-                      : { y: [0, -6, 0], rotate: [0, 1.5, 0] }
-                  }
-                  transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <BookOpen aria-hidden="true" className="size-7" strokeWidth={1.4} />
-                </motion.span>
-                <p className="font-display text-[1.65rem] text-balance italic text-ivory sm:text-[2rem]">
-                  Ask anything in the collection
+              <div className="flex h-full min-h-52 flex-col items-center justify-center px-4 text-center sm:min-h-64 sm:px-6">
+                <span className="mb-4 flex size-12 items-center justify-center rounded-xl border border-line bg-inset text-muted sm:mb-5 sm:size-14">
+                  <BookOpen aria-hidden="true" className="size-6" strokeWidth={1.5} />
+                </span>
+                <p className="text-xl font-semibold text-balance text-fg sm:text-2xl">
+                  Ask a question
                 </p>
-                <p className="mt-3 max-w-md text-[13px] leading-relaxed text-pretty text-muted sm:text-[14px]">
-                  {selectedSource
-                    ? "The pages are indexed. Pose a question and I’ll stay faithful to the source."
-                    : documents.length > 0
-                      ? "Select a document from the collection to begin a conversation."
-                      : "Upload a document first, then begin. I’ll only answer from what you’ve given me."}
+                <p className="mt-2 max-w-md text-[13px] leading-relaxed text-pretty text-muted sm:text-[14px]">
+                  {isChatReady
+                    ? "Ask a question about this document."
+                    : "Select a document, then ask a question about it."}
                 </p>
 
                 {isChatReady && (
-                  <div className="mt-8 flex flex-wrap justify-center gap-2">
-                    {SUGGESTIONS.map((suggestion, index) => (
-                      <motion.button
+                  <div className="mt-6 flex flex-wrap justify-center gap-2">
+                    {SUGGESTIONS.map((suggestion) => (
+                      <button
                         key={suggestion}
                         type="button"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.35 + index * 0.08, duration: 0.4 }}
-                        whileHover={{ y: -2, scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
                         onClick={() => void sendQuestion(suggestion)}
-                        className="rounded-full border border-line bg-inset px-3.5 py-1.5 text-[12px] text-ivory-dim transition-colors hover:border-gold/35 hover:text-gold-hi"
+                        className="rounded-full border border-line bg-inset px-3.5 py-1.5 text-[12px] text-fg-muted transition-colors hover:border-accent hover:text-accent"
                       >
                         {suggestion}
-                      </motion.button>
+                      </button>
                     ))}
                   </div>
                 )}
-              </motion.div>
+              </div>
             )}
 
             {messages.map((message) => {
@@ -1109,16 +903,16 @@ export default function Home() {
               return (
                 <motion.div
                   key={message.id}
-                  initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
-                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{ duration: 0.45, ease: easeOut }}
+                  initial={fade?.initial}
+                  animate={fade?.animate ?? { opacity: 1 }}
+                  transition={fade?.transition}
                   className={`flex ${isUser ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[88%] px-4 py-3.5 text-[15px] leading-relaxed sm:max-w-[78%] ${
+                    className={`max-w-[88%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed sm:max-w-[78%] ${
                       isUser
-                        ? "rounded-[1.35rem] rounded-br-md gold-btn shadow-[0_12px_32px_rgba(201,163,106,0.18)]"
-                        : "rounded-[1.35rem] rounded-bl-md border border-line bg-inset text-ivory"
+                        ? "rounded-br-md bg-accent text-accent-fg"
+                        : "rounded-bl-md border border-line bg-inset text-fg"
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{message.content}</p>
@@ -1127,11 +921,11 @@ export default function Home() {
                         {sources.map((source) => (
                           <span
                             key={source}
-                            className="inline-flex items-center gap-1 rounded-full border border-gold/15 bg-chip px-2 py-0.5 text-[11px] text-ivory-dim"
+                            className="inline-flex items-center gap-1 rounded-full border border-line bg-chip px-2 py-0.5 text-[11px] text-fg-muted"
                           >
                             <FileText
                               aria-hidden="true"
-                              className="size-3 text-gold"
+                              className="size-3 text-muted"
                               strokeWidth={2}
                             />
                             {source}
@@ -1146,26 +940,18 @@ export default function Home() {
 
             {showTyping && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={fade?.initial}
+                animate={fade?.animate ?? { opacity: 1 }}
+                transition={fade?.transition}
                 className="flex justify-start"
               >
                 <div
                   aria-label="Assistant is typing"
-                  className="flex items-center gap-2 rounded-[1.35rem] rounded-bl-md border border-line bg-inset px-4 py-3.5"
+                  className="flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-line bg-inset px-4 py-3.5"
                 >
-                  {[0, 1, 2].map((dot) => (
-                    <motion.span
-                      key={dot}
-                      className="size-1.5 rounded-full bg-gold"
-                      animate={reduceMotion ? undefined : { y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
-                      transition={{
-                        duration: 0.9,
-                        repeat: Infinity,
-                        delay: dot * 0.14,
-                      }}
-                    />
-                  ))}
+                  <span className="typing-dot size-1.5 rounded-full bg-accent" />
+                  <span className="typing-dot size-1.5 rounded-full bg-accent" />
+                  <span className="typing-dot size-1.5 rounded-full bg-accent" />
                 </div>
               </motion.div>
             )}
@@ -1174,7 +960,7 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleSubmit} className="px-3 pb-3 sm:px-6 sm:pb-6">
-            <div className="composer-glow flex items-center gap-1.5 rounded-full border border-line bg-composer py-1.5 pr-1.5 pl-5 transition-shadow duration-300">
+            <div className="composer flex items-center gap-1.5 rounded-xl border border-line bg-composer py-1.5 pr-1.5 pl-4 transition-colors">
               <input
                 type="text"
                 value={question}
@@ -1188,21 +974,19 @@ export default function Home() {
                 }
                 aria-label="Question"
                 autoComplete="off"
-                className="h-10 min-w-0 flex-1 bg-transparent text-sm text-ivory outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-9 min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50"
               />
-              <motion.button
+              <button
                 type="submit"
                 disabled={!canSend}
                 aria-label="Send"
-                whileHover={canSend ? { scale: 1.06 } : undefined}
-                whileTap={canSend ? { scale: 0.94 } : undefined}
-                className="gold-btn inline-flex size-10 shrink-0 items-center justify-center rounded-full disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-muted"
+                className="accent-btn inline-flex size-9 shrink-0 items-center justify-center rounded-lg transition-transform disabled:cursor-not-allowed enabled:hover:scale-105 enabled:active:scale-95"
               >
                 <ArrowUp aria-hidden="true" className="size-4" strokeWidth={2.25} />
-              </motion.button>
+              </button>
             </div>
           </form>
-        </motion.section>
+        </section>
       </main>
     </div>
   );
