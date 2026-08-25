@@ -11,6 +11,7 @@ import {
   Moon,
   Sparkles,
   Sun,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -215,9 +216,6 @@ function statusChipLabel(
   if (documents.length === 1) {
     return documents[0].source;
   }
-  if (status.kind === "success") {
-    return status.filename;
-  }
   return "No document";
 }
 
@@ -261,69 +259,170 @@ function StatusChip({
   );
 }
 
+function IndexedDocumentRow({
+  doc,
+  selected,
+  onSelect,
+  onDelete,
+  reduceMotion,
+}: {
+  doc: IndexedDocument;
+  selected: boolean;
+  onSelect: () => void;
+  onDelete: (source: string) => Promise<void>;
+  reduceMotion: boolean | null;
+}) {
+  const [phase, setPhase] = useState<"idle" | "confirm" | "deleting" | "error">(
+    "idle",
+  );
+  const date = formatShortDate(doc.uploaded_at);
+
+  useEffect(() => {
+    if (phase !== "error") return;
+    const id = window.setTimeout(() => setPhase("idle"), 2800);
+    return () => window.clearTimeout(id);
+  }, [phase]);
+
+  async function confirmDelete(): Promise<void> {
+    setPhase("deleting");
+    try {
+      await onDelete(doc.source);
+    } catch {
+      setPhase("error");
+    }
+  }
+
+  const rowTone = selected
+    ? "border-gold bg-gold/12"
+    : "border-transparent hover:bg-gold/6";
+
+  return (
+    <motion.li
+      layout={reduceMotion ? false : true}
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, height: "auto" }}
+      exit={
+        reduceMotion
+          ? { opacity: 0 }
+          : { opacity: 0, height: 0 }
+      }
+      transition={{ duration: 0.28, ease: easeOut }}
+      className="overflow-hidden"
+    >
+      {phase === "confirm" || phase === "deleting" || phase === "error" ? (
+        <div
+          className={`flex min-h-13 items-center gap-2 border-l-2 px-3 py-2 ${rowTone}`}
+        >
+          {phase === "deleting" ? (
+            <p className="min-w-0 flex-1 text-[12px] text-muted">Deleting…</p>
+          ) : phase === "error" ? (
+            <p className="min-w-0 flex-1 text-[12px] text-error">
+              Couldn&apos;t delete, try again
+            </p>
+          ) : (
+            <>
+              <p className="min-w-0 flex-1 text-[12px] font-medium text-ivory">
+                Delete this document?
+              </p>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                className="shrink-0 rounded-full bg-terracotta/15 px-2.5 py-1 text-[11px] font-semibold text-error transition-colors hover:bg-terracotta/25"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setPhase("idle")}
+                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-muted transition-colors hover:bg-inset hover:text-ivory"
+              >
+                Cancel
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className={`group flex items-center border-l-2 ${rowTone}`}>
+          <button
+            type="button"
+            onClick={onSelect}
+            aria-pressed={selected}
+            className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left"
+          >
+            <FileKindBadge kind={kindFromFilename(doc.source)} compact />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium text-ivory">
+                {doc.source}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] text-muted">
+                {formatChunkCount(doc.chunk_count)}
+                {date ? ` · ${date}` : ""}
+              </p>
+            </div>
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete ${doc.source}`}
+            title="Delete document"
+            onClick={() => setPhase("confirm")}
+            className="mr-1.5 shrink-0 rounded-full p-1.5 text-muted opacity-0 transition-all group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-terracotta/12 hover:text-terracotta focus-visible:opacity-100 max-sm:opacity-100"
+          >
+            <Trash2 aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+          </button>
+        </div>
+      )}
+    </motion.li>
+  );
+}
+
 function IndexedDocumentList({
   documents,
+  selectedSource,
+  onSelect,
+  onDelete,
   reduceMotion,
 }: {
   documents: IndexedDocument[];
+  selectedSource: string | null;
+  onSelect: (source: string) => void;
+  onDelete: (source: string) => Promise<void>;
   reduceMotion: boolean | null;
 }) {
-  if (documents.length === 0) return null;
-
   return (
-    <motion.div
-      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: easeOut }}
-      className="mt-4 min-h-0 lg:mt-5"
-    >
-      <p className="mb-2 text-[12px] font-medium text-ivory-dim">
-        Indexed documents
-      </p>
-      <motion.ul
-        className="max-h-52 divide-y divide-line overflow-y-auto rounded-2xl border border-line bg-inset lg:max-h-none"
-        initial="hidden"
-        animate="show"
-        variants={{
-          hidden: {},
-          show: {
-            transition: {
-              staggerChildren: reduceMotion ? 0 : 0.06,
-            },
-          },
-        }}
-      >
-        {documents.map((doc) => {
-          const date = formatShortDate(doc.uploaded_at);
-
-          return (
-            <motion.li
-              key={doc.source}
-              variants={{
-                hidden: reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8 },
-                show: {
-                  opacity: 1,
-                  y: 0,
-                  transition: { duration: 0.35, ease: easeOut },
-                },
-              }}
-              className="flex items-center gap-3 px-3 py-2.5"
-            >
-              <FileKindBadge kind={kindFromFilename(doc.source)} compact />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-ivory">
-                  {doc.source}
-                </p>
-                <p className="mt-0.5 truncate text-[11px] text-muted">
-                  {formatChunkCount(doc.chunk_count)}
-                  {date ? ` · ${date}` : ""}
-                </p>
-              </div>
-            </motion.li>
-          );
-        })}
-      </motion.ul>
-    </motion.div>
+    <AnimatePresence>
+      {documents.length > 0 && (
+        <motion.div
+          key="indexed-list"
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={
+            reduceMotion
+              ? { opacity: 0 }
+              : { opacity: 0, height: 0, marginTop: 0 }
+          }
+          transition={{ duration: 0.35, ease: easeOut }}
+          className="mt-4 min-h-0 overflow-hidden lg:mt-5"
+        >
+          <p className="mb-2 text-[12px] font-medium text-ivory-dim">
+            Indexed documents
+          </p>
+          <ul className="max-h-52 divide-y divide-line overflow-y-auto rounded-2xl border border-line bg-inset lg:max-h-none">
+            <AnimatePresence initial={false}>
+              {documents.map((doc) => (
+                <IndexedDocumentRow
+                  key={doc.source}
+                  doc={doc}
+                  selected={selectedSource === doc.source}
+                  onSelect={() => onSelect(doc.source)}
+                  onDelete={onDelete}
+                  reduceMotion={reduceMotion}
+                />
+              ))}
+            </AnimatePresence>
+          </ul>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -405,7 +504,6 @@ export default function Home() {
     kind: "idle",
   });
   const [pickedFile, setPickedFile] = useState<PickedFile | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -413,6 +511,11 @@ export default function Home() {
   const [spot, setSpot] = useState({ x: "50%", y: "18%" });
   const [theme, setTheme] = useState<Theme>("light");
   const [documents, setDocuments] = useState<IndexedDocument[]>([]);
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<
+    Record<string, ChatMessage[]>
+  >({});
+  const [pendingSource, setPendingSource] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -422,8 +525,13 @@ export default function Home() {
   } | null>(null);
 
   const isUploading = uploadStatus.kind === "loading";
-  const hasCollection = uploadStatus.kind === "success";
-  const canSend = !isAsking && question.trim().length > 0;
+  const messages = selectedSource
+    ? (conversations[selectedSource] ?? [])
+    : [];
+  const isChatReady = selectedSource !== null;
+  const showTyping = isAsking && pendingSource === selectedSource;
+  const canSend =
+    isChatReady && !isAsking && question.trim().length > 0;
 
   const refreshDocuments = useCallback(async (): Promise<void> => {
     try {
@@ -445,7 +553,7 @@ export default function Home() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isAsking]);
+  }, [messages, showTyping]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(THEME_KEY);
@@ -517,6 +625,7 @@ export default function Home() {
       };
       lastSuccessRef.current = success;
       setUploadStatus({ kind: "success", ...success });
+      setSelectedSource(success.filename);
       await refreshDocuments();
     } catch {
       setUploadStatus({
@@ -524,6 +633,37 @@ export default function Home() {
         message: "Something went wrong, please try again",
       });
     }
+  }
+
+  async function deleteDocument(source: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE}/documents/${encodeURIComponent(source)}`,
+      { method: "DELETE" },
+    );
+
+    if (!response.ok) {
+      throw new Error("Couldn't delete");
+    }
+
+    setDocuments((prev) => prev.filter((doc) => doc.source !== source));
+    setConversations((prev) => {
+      const next = { ...prev };
+      delete next[source];
+      return next;
+    });
+    setSelectedSource((current) => (current === source ? null : current));
+    if (pendingSource === source) {
+      setPendingSource(null);
+      setIsAsking(false);
+    }
+    if (lastSuccessRef.current?.filename === source) {
+      lastSuccessRef.current = null;
+    }
+    setUploadStatus((prev) =>
+      prev.kind === "success" && prev.filename === source
+        ? { kind: "idle" }
+        : prev,
+    );
   }
 
   async function handleFileChange(
@@ -563,60 +703,61 @@ export default function Home() {
     setUploadStatus({ kind: "idle" });
   }
 
+  function appendMessage(source: string, message: ChatMessage): void {
+    setConversations((prev) => ({
+      ...prev,
+      [source]: [...(prev[source] ?? []), message],
+    }));
+  }
+
   async function sendQuestion(text: string): Promise<void> {
     const trimmed = text.trim();
-    if (!trimmed || isAsking) return;
+    if (!trimmed || isAsking || !selectedSource) return;
 
+    const source = selectedSource;
     const userMessage: ChatMessage = {
       id: newId(),
       role: "user",
       content: trimmed,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    appendMessage(source, userMessage);
     setQuestion("");
     setIsAsking(true);
+    setPendingSource(source);
 
     try {
       const response = await fetch(`${API_BASE}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({ question: trimmed, source }),
       });
 
       if (!response.ok) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: newId(),
-            role: "assistant",
-            content: "Something went wrong, please try again",
-          },
-        ]);
+        appendMessage(source, {
+          id: newId(),
+          role: "assistant",
+          content: "Something went wrong, please try again",
+        });
         return;
       }
 
       const data: { answer: string; sources: string[] } = await response.json();
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: newId(),
-          role: "assistant",
-          content: data.answer,
-          sources: data.sources ?? [],
-        },
-      ]);
+      appendMessage(source, {
+        id: newId(),
+        role: "assistant",
+        content: data.answer,
+        sources: data.sources ?? [],
+      });
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: newId(),
-          role: "assistant",
-          content: "Something went wrong, please try again",
-        },
-      ]);
+      appendMessage(source, {
+        id: newId(),
+        role: "assistant",
+        content: "Something went wrong, please try again",
+      });
     } finally {
       setIsAsking(false);
+      setPendingSource(null);
     }
   }
 
@@ -861,6 +1002,9 @@ export default function Home() {
 
             <IndexedDocumentList
               documents={documents}
+              selectedSource={selectedSource}
+              onSelect={setSelectedSource}
+              onDelete={deleteDocument}
               reduceMotion={reduceMotion}
             />
           </div>
@@ -887,14 +1031,27 @@ export default function Home() {
           transition={{ duration: 0.8, delay: 0.16, ease: easeOut }}
           className="glass-panel flex min-h-0 flex-col overflow-hidden rounded-3xl sm:rounded-[1.85rem]"
         >
-          {isAsking && (
+          {showTyping && (
             <div className="h-px w-full overflow-hidden">
               <div className="shimmer h-full w-full bg-gold/50" />
             </div>
           )}
 
+          {selectedSource && (
+            <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 sm:px-7">
+              <FileText
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-gold"
+                strokeWidth={2}
+              />
+              <p className="truncate text-[12px] font-medium tracking-wide text-ivory-dim">
+                {selectedSource}
+              </p>
+            </div>
+          )}
+
           <div className="messages-scroll flex-1 space-y-5 overflow-y-auto px-4 py-6 sm:px-7 sm:py-8">
-            {messages.length === 0 && !isAsking && (
+            {messages.length === 0 && !showTyping && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.97 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -916,12 +1073,14 @@ export default function Home() {
                   Ask anything in the collection
                 </p>
                 <p className="mt-3 max-w-md text-[13px] leading-relaxed text-pretty text-muted sm:text-[14px]">
-                  {hasCollection
+                  {selectedSource
                     ? "The pages are indexed. Pose a question and I’ll stay faithful to the source."
-                    : "Upload a document first, then begin. I’ll only answer from what you’ve given me."}
+                    : documents.length > 0
+                      ? "Select a document from the collection to begin a conversation."
+                      : "Upload a document first, then begin. I’ll only answer from what you’ve given me."}
                 </p>
 
-                {hasCollection && (
+                {isChatReady && (
                   <div className="mt-8 flex flex-wrap justify-center gap-2">
                     {SUGGESTIONS.map((suggestion, index) => (
                       <motion.button
@@ -985,7 +1144,7 @@ export default function Home() {
               );
             })}
 
-            {isAsking && (
+            {showTyping && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1021,8 +1180,12 @@ export default function Home() {
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={handleKeyDown}
-                disabled={isAsking}
-                placeholder="Ask a question…"
+                disabled={!isChatReady || isAsking}
+                placeholder={
+                  isChatReady
+                    ? "Ask a question…"
+                    : "Select a document to begin"
+                }
                 aria-label="Question"
                 autoComplete="off"
                 className="h-10 min-w-0 flex-1 bg-transparent text-sm text-ivory outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50"

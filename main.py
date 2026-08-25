@@ -3,7 +3,8 @@ Docent — FastAPI Q&A backend.
 
 Retrieves the most relevant document chunks from Supabase and asks
 gpt-4o-mini to answer using only that context. Also accepts document
-uploads through POST /upload and lists indexed files at GET /documents.
+uploads through POST /upload, lists indexed files at GET /documents,
+and permanently removes a file with DELETE /documents/{source}.
 
 Run:
     uvicorn main:app --reload --port 8000
@@ -52,6 +53,7 @@ I don't have information about that in the documents I've been given."""
 
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1)
+    source: str | None = None
 
 
 class AskResponse(BaseModel):
@@ -72,6 +74,11 @@ class DocumentSummary(BaseModel):
     source: str
     chunk_count: int
     uploaded_at: str
+
+
+class DeleteDocumentResponse(BaseModel):
+    source: str
+    chunks_deleted: int
 
 
 app = FastAPI(title="Docent", description="Document Q&A chatbot API")
@@ -99,13 +106,18 @@ def embed_question(question: str) -> list[float]:
     return response.data[0].embedding
 
 
-def match_documents(embedding: list[float], match_count: int = MATCH_COUNT) -> list[dict]:
+def match_documents(
+    embedding: list[float],
+    match_count: int = MATCH_COUNT,
+    filter_source: str | None = None,
+) -> list[dict]:
     """Ask Supabase for the closest stored chunks to this embedding."""
     response = supabase.rpc(
         "match_documents",
         {
             "query_embedding": embedding,
             "match_count": match_count,
+            "filter_source": filter_source,
         },
     ).execute()
     return response.data or []
@@ -201,6 +213,33 @@ def list_documents() -> list[DocumentSummary]:
     return summarize_documents(rows)
 
 
+@app.delete("/documents/{source}", response_model=DeleteDocumentResponse)
+def delete_document(source: str) -> DeleteDocumentResponse:
+    """
+    Permanently remove a document and all of its chunks/embeddings.
+
+    This cannot be undone. Every row whose metadata.source matches the
+    given filename is deleted from the vector store.
+    """
+    # Count matching chunks first so we can 404 instead of silently
+    # reporting a successful delete of nothing.
+    matched = (
+        supabase.table("documents")
+        .select("id", count="exact")
+        .filter("metadata->>source", "eq", source)
+        .execute()
+    )
+    chunks_deleted = matched.count if matched.count is not None else len(matched.data or [])
+    if chunks_deleted == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    supabase.table("documents").delete().filter(
+        "metadata->>source", "eq", source
+    ).execute()
+
+    return DeleteDocumentResponse(source=source, chunks_deleted=chunks_deleted)
+
+
 @app.post("/ask", response_model=AskResponse)
 def ask(request: AskRequest) -> AskResponse:
     """Retrieve relevant chunks and generate a grounded answer."""
@@ -208,7 +247,9 @@ def ask(request: AskRequest) -> AskResponse:
     embedding = embed_question(request.question)
 
     # 2. Fetch the top matching chunks from Supabase (up to MATCH_COUNT).
-    chunks = match_documents(embedding)
+    # When the frontend has a document selected, filter_source limits retrieval
+    # to that file; None searches every indexed document.
+    chunks = match_documents(embedding, filter_source=request.source)
 
     # Log raw scores for reference; do not filter on them.
     log_raw_match_scores(chunks)
